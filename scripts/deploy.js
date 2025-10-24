@@ -3,8 +3,9 @@
 const fs = require('fs');
 const path = require('path');
 
-// Read deployment configuration
-const configPath = path.join(__dirname, 'deploy-config.json');
+// Read deployment configuration from project root
+const projectRoot = path.join(__dirname, '..');
+const configPath = path.join(projectRoot, 'deploy-config.json');
 let config;
 
 try {
@@ -15,7 +16,7 @@ try {
   process.exit(1);
 }
 
-const sourceDir = path.join(__dirname, config.sourceDir);
+const sourceDir = path.join(projectRoot, config.sourceDir);
 const targetDrive = config.targetDrive;
 
 console.log('MatrixPortal Deployment');

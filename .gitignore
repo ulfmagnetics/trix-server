@@ -1,0 +1,9 @@
+# MatrixPortal secrets file (contains WiFi credentials, API keys, etc.)
+matrixportal/secrets.py
+
+# Node modules
+node_modules/
+
+# IDE
+.vscode/
+.idea/

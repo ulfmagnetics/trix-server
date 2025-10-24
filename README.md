@@ -6,8 +6,9 @@ MatrixPortal M4 development and deployment system using CircuitPython.
 
 - `matrixportal/` - CircuitPython source code for the MatrixPortal M4
   - `code.py` - Main entry point (auto-runs on device boot)
+- `scripts/` - Node.js deployment scripts
+  - `deploy.js` - Deployment script
 - `deploy-config.json` - Deployment configuration (target drive letter)
-- `deploy.js` - Deployment script
 
 ## Getting Started
 

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "MatrixPortal M4 development and deployment",
   "scripts": {
-    "deploy": "node deploy.js"
+    "deploy": "node scripts/deploy.js"
   },
   "keywords": [
     "matrixportal",
