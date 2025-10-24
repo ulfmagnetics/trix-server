@@ -1,0 +1,15 @@
+{
+  "name": "trix-server",
+  "version": "1.0.0",
+  "description": "MatrixPortal M4 development and deployment",
+  "scripts": {
+    "deploy": "node deploy.js"
+  },
+  "keywords": [
+    "matrixportal",
+    "circuitpython",
+    "adafruit"
+  ],
+  "author": "",
+  "license": "ISC"
+}
