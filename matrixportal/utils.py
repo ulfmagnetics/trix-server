@@ -7,6 +7,11 @@ def _debug_print(msg: str) -> None:
     if DEBUG:
         print(msg)
 
+# def fetch_and_display_bmp(
+#     requests: adafruit_requests.Session, 
+#     url: str, 
+#     tilegrid: displayio.TileGrid) -> None:
+
 def bitmap_from_bytes(bmp_data: bytes, source_name: str = "bytes") -> Bitmap:
     """
     Create a Bitmap instance by parsing BMP data from bytes.
@@ -27,7 +32,7 @@ def bitmap_from_bytes(bmp_data: bytes, source_name: str = "bytes") -> Bitmap:
     bmp_header_bytes = bmp_data[0:138]
 
     if bmp_header_bytes[0:2] != b"BM":
-        raise ValueError("Invalid BMP file - missing BM signature")
+        raise ValueError(f"Invalid BMP file - missing BM signature: {bmp_header_bytes[0:2]}")
 
     bmp_header = memoryview(bmp_header_bytes).cast("H")
 
