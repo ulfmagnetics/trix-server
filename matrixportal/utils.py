@@ -14,11 +14,13 @@ def bitmap_from_bmp_file(filename: str) -> Bitmap:
     """
     with open(filename, "rb") as file:
         file.seek(0)
-        bmp_header = memoryview(file.read(138)).cast("H")
-        
-        if len(bmp_header.tobytes()) != 138 or bmp_header.tobytes()[0:2] != b"BM":
+        bmp_header_bytes = file.read(138)
+
+        if len(bmp_header_bytes) != 138 or bmp_header_bytes[0:2] != b"BM":
             raise ValueError("Invalid BMP file")
-        
+
+        bmp_header = memoryview(bmp_header_bytes).cast("H")
+
         data_offset = read_word(bmp_header, 5)
         header_size = read_word(bmp_header, 7)
         bits_per_pixel = bmp_header[14]

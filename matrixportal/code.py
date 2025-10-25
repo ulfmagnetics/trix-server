@@ -63,19 +63,31 @@ utils.dump_mem_usage()
 print("displaying...")
 matrix = Matrix()
 splash = displayio.Group()
-bmp = displayio.Bitmap(64, 32, 256)
-fill_region(bmp, 10, 10, 44, 30, 180)
+
+# ... placeholder bitmap (just a yellow rectangle) ...
+# bmp = displayio.Bitmap(64, 32, 256)
+# fill_region(bmp, 10, 10, 44, 30, 180)
+# color_converter = displayio.ColorConverter(
+#     input_colorspace=displayio.Colorspace.RGB565_SWAPPED,
+#     dither=True,
+# )
+
+bmp = utils.bitmap_from_bmp_file(image_path)
 color_converter = displayio.ColorConverter(
-    input_colorspace=displayio.Colorspace.RGB565_SWAPPED,
+    input_colorspace=displayio.Colorspace.RGB888,
     dither=True,
 )
+
 face = displayio.TileGrid(bmp, pixel_shader=color_converter)
 splash.append(face)
 matrix.display.root_group = splash
+
+# ... exploring OnDiskBitmap approach ...
 # odb = displayio.OnDiskBitmap(image_path)
 # tile_grid = displayio.TileGrid(odb, pixel_shader=odb.pixel_shader)
 # splash.append(tile_grid)
 # matrix.display.root_group = splash
+
 print("displayed")
 
 while True:
