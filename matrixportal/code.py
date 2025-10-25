@@ -23,7 +23,8 @@ except ImportError:
 
 print("ESP32 SPI webclient test!")
 
-BITMAP_URL = "https://s3.amazonaws.com/s3.ulfmagnet.com/sketchin/sir_of_being_on_fire_64x32.bmp"
+# BITMAP_URL = "https://s3.amazonaws.com/s3.ulfmagnet.com/sketchin/sir_of_being_on_fire_64x32.bmp"
+BITMAP_URL = "https://s3.us-east-1.amazonaws.com/s3.ulfmagnet.com/sketchin/matrix.bmp"
 
 # If you are using a board with pre-defined ESP32 Pins:
 esp32_cs = DigitalInOut(board.ESP_CS)
@@ -54,7 +55,7 @@ print("Fetching bitmap from", BITMAP_URL)
 r = requests.get(BITMAP_URL)
 # with open(image_path, mode='wb') as f:
 #     f.write(r.content)
-bitmap_data = r.content
+bmp_data = r.content
 r.close()
 
 utils.dump_mem_usage()
@@ -72,7 +73,7 @@ splash = displayio.Group()
 #     dither=True,
 # )
 
-bmp = utils.bitmap_from_bmp_file(image_path)
+bmp = utils.bitmap_from_bytes(bmp_data)
 color_converter = displayio.ColorConverter(
     input_colorspace=displayio.Colorspace.RGB888,
     dither=True,
