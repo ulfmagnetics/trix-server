@@ -52,26 +52,26 @@ utils.dump_mem_usage()
 image_path = "/images/current.bmp"
 print("Fetching bitmap from", BITMAP_URL)
 r = requests.get(BITMAP_URL)
-with open(image_path, mode='wb') as f:
-    f.write(r.content)
-# bitmap_data = r.content
+# with open(image_path, mode='wb') as f:
+#     f.write(r.content)
+bitmap_data = r.content
 r.close()
 
 utils.dump_mem_usage()
 
 # TODO: read the bitmap from memory, create palette, write pixels
 print("displaying...")
-# matrix = Matrix()
-# splash = displayio.Group()
-# bmp = displayio.Bitmap(64, 32, 256)
-# fill_region(bmp, 10, 10, 44, 30, 180)
-# color_converter = displayio.ColorConverter(
-#     input_colorspace=displayio.Colorspace.RGB565_SWAPPED,
-#     dither=True,
-# )
-# face = displayio.TileGrid(bmp, pixel_shader=color_converter)
-# splash.append(face)
-# matrix.display.root_group = splash
+matrix = Matrix()
+splash = displayio.Group()
+bmp = displayio.Bitmap(64, 32, 256)
+fill_region(bmp, 10, 10, 44, 30, 180)
+color_converter = displayio.ColorConverter(
+    input_colorspace=displayio.Colorspace.RGB565_SWAPPED,
+    dither=True,
+)
+face = displayio.TileGrid(bmp, pixel_shader=color_converter)
+splash.append(face)
+matrix.display.root_group = splash
 # odb = displayio.OnDiskBitmap(image_path)
 # tile_grid = displayio.TileGrid(odb, pixel_shader=odb.pixel_shader)
 # splash.append(tile_grid)
