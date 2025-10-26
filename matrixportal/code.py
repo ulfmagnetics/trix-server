@@ -9,6 +9,7 @@ from adafruit_matrixportal.matrix import Matrix
 from adafruit_matrixportal.graphics import Graphics
 from digitalio import DigitalInOut, Direction, Pull
 import time
+import gc
 
 import utils
 import displayio
@@ -24,12 +25,11 @@ except ImportError:
 
 print("ESP32 SPI webclient test!")
 
-# BITMAP_URL = "https://s3.amazonaws.com/s3.ulfmagnet.com/sketchin/sir_of_being_on_fire_64x32.bmp"
-# BITMAP_URL = "https://s3.us-east-1.amazonaws.com/s3.ulfmagnet.com/sketchin/matrix.bmp"
 BITMAP_URLS = [
-    "https://s3.us-east-1.amazonaws.com/s3.ulfmagnet.com/sketchin/just-red.bmp", # displays as blue
-    "https://s3.us-east-1.amazonaws.com/s3.ulfmagnet.com/sketchin/just-green.bmp", # display as green
-    "https://s3.us-east-1.amazonaws.com/s3.ulfmagnet.com/sketchin/just-blue.bmp", # displays as blue
+    "https://s3.us-east-1.amazonaws.com/s3.ulfmagnet.com/sketchin/just-red.bmp", 
+    "https://s3.us-east-1.amazonaws.com/s3.ulfmagnet.com/sketchin/just-green.bmp",
+    "https://s3.us-east-1.amazonaws.com/s3.ulfmagnet.com/sketchin/just-blue.bmp", 
+    "https://s3.us-east-1.amazonaws.com/s3.ulfmagnet.com/sketchin/matrix.bmp",
 ]
 
 # If you are using a board with pre-defined ESP32 Pins:
@@ -74,8 +74,17 @@ color_converter = displayio.ColorConverter(
     dither=True,
 )
 
+# Global reference to current TileGrid (for cleanup)
+current_face = None
+
 def load_and_display_bitmap(index):
     """Fetch and display a bitmap from BITMAP_URLS[index]."""
+    global current_face
+
+    # Free memory before allocation
+    gc.collect()
+    print(f"Memory before load: {gc.mem_free()} bytes free")
+
     bitmap_url = BITMAP_URLS[index]
     print(f"Fetching bitmap {index}: {bitmap_url}")
 
@@ -83,19 +92,40 @@ def load_and_display_bitmap(index):
     r = requests.get(bitmap_url)
     bmp_data = r.content
     r.close()
+    del r
+    gc.collect()
 
     # Parse bitmap
     bmp = utils.bitmap_from_bytes(bmp_data, source_name=bitmap_url)
 
-    # Create TileGrid
-    face = displayio.TileGrid(bmp, pixel_shader=color_converter)
+    # Delete bitmap data immediately after parsing
+    del bmp_data
+    gc.collect()
 
-    # Update display
+    # Create TileGrid
+    new_face = displayio.TileGrid(bmp, pixel_shader=color_converter)
+
+    # Delete bitmap reference (TileGrid holds its own reference)
+    del bmp
+
+    # Clear old display and free memory
     while len(splash) > 0:
         splash.pop()
-    splash.append(face)
+
+    # Delete old face reference
+    if current_face is not None:
+        del current_face
+
+    # Run garbage collection to free old bitmap/TileGrid
+    gc.collect()
+
+    # Update display with new face
+    splash.append(new_face)
+    current_face = new_face
 
     print(f"Displayed bitmap {index}")
+    print(f"Memory after load: {gc.mem_free()} bytes free")
+    gc.collect()
 
 # Track current bitmap index
 current_index = 0
@@ -119,5 +149,5 @@ while True:
         print(f"Button DOWN pressed - switching to index {current_index}")
         load_and_display_bitmap(current_index)
         time.sleep(0.3)  # Debounce delay
-
+    
     time.sleep(0.1)  # Small delay to prevent busy-waiting
