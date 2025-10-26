@@ -7,11 +7,6 @@ def _debug_print(msg: str) -> None:
     if DEBUG:
         print(msg)
 
-# def fetch_and_display_bmp(
-#     requests: adafruit_requests.Session, 
-#     url: str, 
-#     tilegrid: displayio.TileGrid) -> None:
-
 def bitmap_from_bytes(bmp_data: bytes, source_name: str = "bytes") -> Bitmap:
     """
     Create a Bitmap instance by parsing BMP data from bytes.
