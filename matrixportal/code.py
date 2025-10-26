@@ -25,10 +25,6 @@ except ImportError:
 
 print("MatrixPortal HTTP Server Starting...")
 
-# Default bitmap to display on startup
-DEFAULT_BITMAP_URL = "https://s3.us-east-1.amazonaws.com/s3.ulfmagnet.com/sketchin/matrix.bmp"
-
-# If you are using a board with pre-defined ESP32 Pins:
 esp32_cs = DigitalInOut(board.ESP_CS)
 esp32_ready = DigitalInOut(board.ESP_BUSY)
 esp32_reset = DigitalInOut(board.ESP_RESET)
@@ -54,8 +50,6 @@ requests = adafruit_requests.Session(pool, ssl_context)
 matrix = Matrix()
 splash = displayio.Group()
 matrix.display.root_group = splash
-
-# Color converter for RGB565 bitmaps
 color_converter = displayio.ColorConverter(
     input_colorspace=displayio.Colorspace.RGB565,
     dither=True,
@@ -64,20 +58,15 @@ color_converter = displayio.ColorConverter(
 # Global reference to current TileGrid (for cleanup)
 current_face = None
 
-def load_and_display_bitmap(bitmap_url):
-    """Fetch and display a bitmap from the given URL."""
+def display_bitmap(bmp):
+    """Clear old display and show new bitmap."""
     global current_face
 
-    # Free memory before allocation
-    gc.collect()
-    print(f"Memory before load: {gc.mem_free()} bytes free")
-
-    # CRITICAL: Clear old display FIRST, before downloading new bitmap
+    # CRITICAL: Clear old display FIRST, before creating new TileGrid
     # This ensures we never have both bitmaps in RAM at once
     while len(splash) > 0:
         splash.pop()
 
-    # Delete old face reference
     if current_face is not None:
         del current_face
         current_face = None
@@ -86,7 +75,24 @@ def load_and_display_bitmap(bitmap_url):
     gc.collect()
     print(f"Memory after clearing old bitmap: {gc.mem_free()} bytes free")
 
-    # NOW download new bitmap (old bitmap already freed)
+    # Create TileGrid
+    new_face = displayio.TileGrid(bmp, pixel_shader=color_converter)
+
+    # Delete bitmap reference (TileGrid holds its own reference)
+    del bmp
+    gc.collect()
+
+    # Update display
+    splash.append(new_face)
+    current_face = new_face
+
+    print(f"Memory after displaying bitmap: {gc.mem_free()} bytes free")
+    gc.collect()
+
+def load_and_display_bitmap(bitmap_url):
+    """Fetch and display a bitmap from the given URL."""
+    gc.collect()
+    print(f"Memory before load: {gc.mem_free()} bytes free")
     print(f"Fetching bitmap: {bitmap_url}")
 
     # Start HTTP request
@@ -127,25 +133,13 @@ def load_and_display_bitmap(bitmap_url):
     del bmp_data
     gc.collect()
 
-    # Create TileGrid
-    new_face = displayio.TileGrid(bmp, pixel_shader=color_converter)
-
-    # Delete bitmap reference (TileGrid holds its own reference)
-    del bmp
-    gc.collect()
-
-    # Update display with new face
-    splash.append(new_face)
-    current_face = new_face
+    # Display the bitmap (clears old display and creates TileGrid)
+    display_bitmap(bmp)
 
     print(f"Displayed bitmap: {bitmap_url}")
-    print(f"Memory after load: {gc.mem_free()} bytes free")
-    gc.collect()
 
 # Don't load default bitmap - save memory for HTTP server
 # Display will be blank until first POST request
-print("Skipping default bitmap to conserve memory for HTTP server")
-print("Display will show last image or be blank until first POST")
 gc.collect()
 print(f"Memory after GC: {gc.mem_free()} bytes free")
 
@@ -154,6 +148,42 @@ http_server = Server(pool, debug=False)
 
 @http_server.route("/display", methods=["POST"])
 def display_bitmap_handler(request: Request):
+    """Handle POST requests with bitmap data in body (raw binary)"""
+    # Aggressive GC before handling request
+    gc.collect()
+    print(f"Memory at request start: {gc.mem_free()} bytes free")
+    print(f"\nReceived POST request to /display")
+
+    try:
+        # Get raw binary data from POST body
+        bmp_data = request.body
+
+        if not bmp_data or len(bmp_data) < 138:
+            print(f"Invalid or empty bitmap data (size: {len(bmp_data) if bmp_data else 0})")
+            return Response(request, "Invalid bitmap data", status=(400, "Bad Request"))
+
+        print(f"Received {len(bmp_data)} bytes of bitmap data")
+
+        # Parse bitmap directly from bytes
+        bmp = utils.bitmap_from_bytes(bmp_data, source_name="uploaded")
+
+        # Free bitmap data immediately
+        del bmp_data
+        gc.collect()
+
+        # Display the bitmap (clears old display and creates TileGrid)
+        display_bitmap(bmp)
+
+        print(f"Displayed uploaded bitmap")
+
+        return Response(request, "Bitmap displayed successfully", status=(200, "OK"))
+
+    except Exception as e:
+        print(f"Error loading bitmap: {e}")
+        return Response(request, f"Error loading bitmap: {e}", status=(500, "Internal Server Error"))
+
+@http_server.route("/fetch", methods=["POST"])
+def fetch_bitmap_handler(request: Request):
     """Handle POST requests with bitmap URL in body"""
     # Aggressive GC before handling request
     gc.collect()
@@ -191,7 +221,6 @@ print("\n" + "=" * 50)
 print(f"Starting HTTP server at {ip}:80")
 http_server.start(str(ip), port=80)
 print(f"MatrixPortal HTTP Server Ready!")
-print(f"Test with: curl -X POST http://{ip}/display -d \"<bitmap-url>\"")
 print("=" * 50)
 
 # Main server loop

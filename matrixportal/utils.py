@@ -2,11 +2,6 @@ import gc
 from displayio import Bitmap
 from config import DEBUG
 
-def _debug_print(msg: str) -> None:
-    """Print debug message if DEBUG mode is enabled."""
-    if DEBUG:
-        print(msg)
-
 def bitmap_from_bytes(bmp_data: bytes, source_name: str = "bytes") -> Bitmap:
     """
     Create a Bitmap instance by parsing BMP data from bytes.
@@ -173,3 +168,8 @@ def dump_mem_usage():
     print(f"Free: {free/1023:.1f} KB")
     print(f"Used: {allocated/1023:.1f} KB")
     print(f"Total: {total/1023:.1f} KB")
+
+def _debug_print(msg: str) -> None:
+    """Print debug message if DEBUG mode is enabled."""
+    if DEBUG:
+        print(msg)
