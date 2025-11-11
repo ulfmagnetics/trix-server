@@ -24,6 +24,18 @@ class DisplayManager:
         self.color_converter = color_converter
         self.current_face = None
 
+    def clear_display(self):
+        """Clear the display by removing all TileGrids."""
+        while len(self.splash) > 0:
+            self.splash.pop()
+
+        if self.current_face is not None:
+            del self.current_face
+            self.current_face = None
+
+        gc.collect()
+        print(f"Memory after clearing display: {gc.mem_free()} bytes free")
+
     def display_bitmap(self, bmp):
         """Clear old display and show new bitmap.
 
