@@ -6,6 +6,7 @@
 from . import display
 from . import fetch
 from . import clear
+from . import crash
 
 
 def register_all(server, context):
@@ -18,3 +19,4 @@ def register_all(server, context):
     display.register(server, context)
     fetch.register(server, context)
     clear.register(server, context)
+    crash.register(server, context)

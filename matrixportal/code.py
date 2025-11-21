@@ -18,6 +18,7 @@ import adafruit_esp32spi.adafruit_esp32spi_socketpool as socketpool
 
 from display import DisplayManager
 from context import AppContext
+from crash_logger import logger
 import routes
 
 # Get wifi details and more from a secrets.py file
@@ -75,29 +76,50 @@ def initialize_networking_and_server(radio, display_manager):
 
 
 print("MatrixPortal HTTP Server Starting...")
+logger.log_event("MatrixPortal HTTP Server Starting")
 
 # Initialize ESP32 SPI WiFi hardware
-esp32_cs = DigitalInOut(board.ESP_CS)
-esp32_ready = DigitalInOut(board.ESP_BUSY)
-esp32_reset = DigitalInOut(board.ESP_RESET)
-spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
-radio = adafruit_esp32spi.ESP_SPIcontrol(spi, esp32_cs, esp32_ready, esp32_reset)
+try:
+    esp32_cs = DigitalInOut(board.ESP_CS)
+    esp32_ready = DigitalInOut(board.ESP_BUSY)
+    esp32_reset = DigitalInOut(board.ESP_RESET)
+    spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
+    radio = adafruit_esp32spi.ESP_SPIcontrol(spi, esp32_cs, esp32_ready, esp32_reset)
+    logger.log_event("ESP32 SPI initialized")
+except Exception as e:
+    logger.log_exception(e, "ESP32 SPI initialization")
+    raise
 
 # Connect to WiFi
-connect_wifi(radio, secrets)
+try:
+    connect_wifi(radio, secrets)
+    logger.log_event(f"Connected to WiFi: {str(radio.ap_info.ssid, 'utf-8')}")
+except Exception as e:
+    logger.log_exception(e, "WiFi connection")
+    raise
 
 # Initialize display
-matrix = Matrix()
-color_converter = displayio.ColorConverter(
-    input_colorspace=displayio.Colorspace.RGB565,
-    dither=True,
-)
-display_manager = DisplayManager(matrix, color_converter)
+try:
+    matrix = Matrix()
+    color_converter = displayio.ColorConverter(
+        input_colorspace=displayio.Colorspace.RGB565,
+        dither=True,
+    )
+    display_manager = DisplayManager(matrix, color_converter)
+    logger.log_event("Display initialized")
+except Exception as e:
+    logger.log_exception(e, "Display initialization")
+    raise
 
 # Initialize networking and HTTP server
-gc.collect()
-print(f"Memory after hardware initialization: {gc.mem_free()} bytes free")
-http_server, context = initialize_networking_and_server(radio, display_manager)
+try:
+    gc.collect()
+    print(f"Memory after hardware initialization: {gc.mem_free()} bytes free")
+    http_server, context = initialize_networking_and_server(radio, display_manager)
+    logger.log_event(f"HTTP server ready (free memory: {gc.mem_free()} bytes)")
+except Exception as e:
+    logger.log_exception(e, "Server initialization")
+    raise
 
 print("=" * 50)
 print(f"MatrixPortal HTTP Server Ready!")
@@ -105,6 +127,7 @@ print("=" * 50)
 
 # Main server loop
 print("Listening for HTTP requests w/ automatic error recovery...")
+logger.log_event("Entering main server loop")
 consecutive_errors = 0
 ERROR_THRESHOLD = 3
 
@@ -116,28 +139,38 @@ while True:
         gc.collect()
     except Exception as e:
         print(f"Server error: {e}")
+        logger.log_exception(e, f"Server poll (error #{consecutive_errors + 1})")
         consecutive_errors += 1
 
         if consecutive_errors >= ERROR_THRESHOLD:
             print(f"\nESP32 unresponsive after {consecutive_errors} errors, performing hardware reset...")
+            logger.log_esp32_reset(f"consecutive errors ({consecutive_errors})")
 
-            # Clear display to remove stale data
-            display_manager.clear_display()
+            try:
+                # Clear display to remove stale data
+                display_manager.clear_display()
 
-            # Reset ESP32 using built-in method
-            print("Resetting ESP32...")
-            radio.reset()
-            time.sleep(2)  # Wait for ESP32 boot
+                # Reset ESP32 using built-in method
+                print("Resetting ESP32...")
+                radio.reset()
+                time.sleep(2)  # Wait for ESP32 boot
 
-            # Reconnect WiFi and reinitialize server
-            connect_wifi(radio, secrets)
-            http_server, context = initialize_networking_and_server(radio, display_manager)
+                # Reconnect WiFi and reinitialize server
+                connect_wifi(radio, secrets)
+                http_server, context = initialize_networking_and_server(radio, display_manager)
 
-            print("=" * 50)
-            print("Server recovery complete!")
-            print("=" * 50)
+                print("=" * 50)
+                print("Server recovery complete!")
+                print("=" * 50)
+                logger.log_event("ESP32 reset and server recovery successful")
 
-            consecutive_errors = 0  # Reset counter
+                consecutive_errors = 0  # Reset counter
+
+            except Exception as recovery_error:
+                logger.log_exception(recovery_error, "ESP32 reset recovery failed")
+                print(f"FATAL: Recovery failed - {recovery_error}")
+                # Re-raise to trigger safe mode
+                raise
 
         gc.collect()  # Also collect on error
         time.sleep(1)
