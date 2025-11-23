@@ -63,10 +63,7 @@ def bitmap_from_bytes(bmp_data: bytes, source_name: str = "bytes") -> Bitmap:
 
     _debug_print(f"  Value count: {value_count}")
 
-    # Create the bitmap
-    bitmap = Bitmap(width, height, value_count)
-
-    # Read pixel data and populate bitmap
+    # Read pixel data and populate bitmap (calculate stride first for validation)
     bytes_per_pixel = max(1, bits_per_pixel // 8)
     pixels_per_byte = 8 // bits_per_pixel if bits_per_pixel < 8 else 1
 
@@ -83,6 +80,12 @@ def bitmap_from_bytes(bmp_data: bytes, source_name: str = "bytes") -> Bitmap:
 
     _debug_print(f"  Stride: {stride} bytes")
     _debug_print(f"  Bytes per pixel: {bytes_per_pixel}")
+
+    # Validate BMP data completeness before processing
+    _validate_bmp_data(bmp_data, width, height, bits_per_pixel, data_offset, stride)
+
+    # Create the bitmap
+    bitmap = Bitmap(width, height, value_count)
 
     # Read pixel data (BMP rows are stored bottom-to-top)
     for y in range(height):
@@ -108,11 +111,21 @@ def bitmap_from_bytes(bmp_data: bytes, source_name: str = "bytes") -> Bitmap:
                 # 16-bit RGB565 format
                 # BMP stores as little-endian 16-bit values
                 byte_idx = x * 2
+                if byte_idx + 1 >= len(row_data):
+                    raise ValueError(
+                        f"Incomplete row data at row {y}, pixel {x}: "
+                        f"need {byte_idx + 1} bytes, got {len(row_data)} bytes"
+                    )
                 pixel_value = row_data[byte_idx] | (row_data[byte_idx + 1] << 8)
             elif bits_per_pixel == 24:
                 # 24-bit RGB888 format
                 # BMP stores pixels as BGR (blue, green, red)
                 byte_idx = x * 3
+                if byte_idx + 2 >= len(row_data):
+                    raise ValueError(
+                        f"Incomplete row data at row {y}, pixel {x}: "
+                        f"need {byte_idx + 2} bytes, got {len(row_data)} bytes"
+                    )
                 b = row_data[byte_idx + 0]
                 g = row_data[byte_idx + 1]
                 r = row_data[byte_idx + 2]
@@ -125,6 +138,11 @@ def bitmap_from_bytes(bmp_data: bytes, source_name: str = "bytes") -> Bitmap:
                 # 32-bit RGBA/RGBX format
                 # BMP stores pixels as BGRA/BGRX
                 byte_idx = x * 4
+                if byte_idx + 3 >= len(row_data):
+                    raise ValueError(
+                        f"Incomplete row data at row {y}, pixel {x}: "
+                        f"need {byte_idx + 3} bytes, got {len(row_data)} bytes"
+                    )
                 b = row_data[byte_idx + 0]
                 g = row_data[byte_idx + 1]
                 r = row_data[byte_idx + 2]
@@ -155,6 +173,48 @@ def bitmap_from_bmp_file(filename: str) -> Bitmap:
         bmp_data = file.read()
 
     return bitmap_from_bytes(bmp_data, source_name=filename)
+
+def _validate_bmp_data(bmp_data, width, height, bits_per_pixel, data_offset, stride):
+    """Validate BMP has complete pixel data and correct dimensions.
+
+    Args:
+        bmp_data: Raw BMP file bytes
+        width: Image width from header
+        height: Image height from header
+        bits_per_pixel: Bits per pixel from header
+        data_offset: Pixel data offset from header
+        stride: Calculated row stride in bytes
+
+    Raises:
+        ValueError: If validation fails
+    """
+    # 1. Enforce expected dimensions (64x32 for MatrixPortal)
+    if width != 64 or height != 32:
+        raise ValueError(f"Invalid dimensions: {width}x{height}. Expected 64x32")
+
+    # 2. Validate bits per pixel is supported
+    if bits_per_pixel not in [1, 4, 8, 16, 24, 32]:
+        raise ValueError(f"Unsupported bits per pixel: {bits_per_pixel}")
+
+    # 3. Calculate expected pixel data size
+    expected_pixel_bytes = stride * height
+    expected_total_size = data_offset + expected_pixel_bytes
+
+    # 4. Validate we have enough data
+    actual_size = len(bmp_data)
+    if actual_size < expected_total_size:
+        raise ValueError(
+            f"Incomplete BMP data: got {actual_size} bytes, "
+            f"expected {expected_total_size} bytes "
+            f"(header: {data_offset}, pixel data: {expected_pixel_bytes})"
+        )
+
+    # 5. Validate data_offset is reasonable
+    if data_offset < 54:  # Minimum BMP header size
+        raise ValueError(f"Invalid data offset: {data_offset} (too small)")
+    if data_offset >= actual_size:
+        raise ValueError(f"Invalid data offset: {data_offset} (beyond file size {actual_size})")
+
 
 def read_word(header: memoryview, index: int) -> int:
     """Read a 32-bit value from a memoryview cast as 16-bit values"""

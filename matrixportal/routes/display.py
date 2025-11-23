@@ -5,7 +5,9 @@
 
 import gc
 import utils
+import traceback
 from adafruit_httpserver import Request, Response
+from crash_logger import logger
 
 
 def register(server, context):
@@ -34,6 +36,13 @@ def register(server, context):
 
             print(f"Received {len(bmp_data)} bytes of bitmap data")
 
+            # Expected size for 64x32 24-bit BMP: 54 byte header + (192 bytes/row × 32 rows) = 6198 bytes
+            EXPECTED_BMP_SIZE = 6198
+            if len(bmp_data) != EXPECTED_BMP_SIZE:
+                msg = f"Invalid bitmap size: {len(bmp_data)} bytes (expected {EXPECTED_BMP_SIZE} for 64x32 24-bit BMP)"
+                print(msg)
+                return Response(request, msg, status=(400, "Bad Request"))
+
             # Parse bitmap directly from bytes
             bmp = utils.bitmap_from_bytes(bmp_data, source_name="uploaded")
 
@@ -50,4 +59,8 @@ def register(server, context):
 
         except Exception as e:
             print(f"Error loading bitmap: {e}")
+            # Print full stack trace to console
+            traceback.print_exception(e)
+            # Log to crash logger
+            logger.log_exception(e, "HTTP /display handler")
             return Response(request, f"Error loading bitmap: {e}", status=(500, "Internal Server Error"))
