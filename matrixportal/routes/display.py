@@ -27,6 +27,10 @@ def register(server, context):
         print("\nReceived POST request to /display")
 
         try:
+            # CRITICAL: Force GC immediately before accessing request.body
+            # to ensure we have a contiguous memory block available
+            gc.collect()
+
             # Get raw binary data from POST body
             bmp_data = request.body
 

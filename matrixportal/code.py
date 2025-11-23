@@ -133,6 +133,8 @@ ERROR_THRESHOLD = 3
 
 while True:
     try:
+        # Force GC BEFORE poll to defragment memory for incoming requests
+        gc.collect()
         http_server.poll()
         consecutive_errors = 0  # Reset on success
         # Force GC after each poll cycle to prevent memory buildup

@@ -24,6 +24,10 @@ def register(server, context):
         print("\nReceived POST request to /fetch")
 
         try:
+            # CRITICAL: Force GC immediately before accessing request.body
+            # to ensure we have a contiguous memory block available
+            gc.collect()
+
             # Extract URL from raw POST body
             body_bytes = request.body
             bitmap_url = body_bytes.decode('utf-8', 'ignore').strip()
