@@ -4,6 +4,10 @@ matrixportal/secrets.py
 # MatrixPortal config file (personal debug settings)
 matrixportal/config.py
 
+# Compiled .mpy bytecode files
+*.mpy
+matrixportal/build/
+
 # Node modules
 node_modules/
 
