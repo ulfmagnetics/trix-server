@@ -1,1 +1,0 @@
-* https://github.com/adafruit/Adafruit_CircuitPython_ESP32SPI/pull/218 has been merged -> update the CircuitPython package to use the code from the master branch
