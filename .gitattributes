@@ -1,0 +1,5 @@
+# Ensure shell scripts always use LF line endings (for WSL compatibility)
+*.sh text eol=lf
+
+# Let Git handle line endings automatically for other text files
+* text=auto

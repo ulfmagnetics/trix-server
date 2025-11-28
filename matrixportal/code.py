@@ -65,6 +65,12 @@ def initialize_networking_and_server(radio, display_manager):
 
     # Create HTTP server and register routes
     http_server = Server(pool, debug=False)
+
+    # Configure server for reliable large POST requests (6198-byte bitmaps)
+    # Default buffer (1024 bytes) requires ~6 recv() calls, increasing timeout risk
+    http_server.request_buffer_size = 8192  # Reduces to 1-2 recv() calls
+    http_server.socket_timeout = 3  # Increased from 1s to handle network latency
+
     routes.register_all(http_server, context)
 
     # Start HTTP server

@@ -65,11 +65,13 @@ function buildMpyFiles() {
 
   try {
     // Convert Windows path to WSL path
+    console.log('projectRoot:', projectRoot);
     const wslProjectPath = projectRoot.replace(/\\/g, '/').replace(/^([A-Z]):/, (_match, drive) => {
       return `/mnt/${drive.toLowerCase()}`;
     });
 
     // Run build.sh in WSL Ubuntu 24.04
+    console.log('wslProjectPath:', wslProjectPath);
     const buildCommand = `wsl -d Ubuntu-24.04 bash -c "cd '${wslProjectPath}' && ./build.sh"`;
     execSync(buildCommand, { stdio: 'inherit' });
 
