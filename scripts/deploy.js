@@ -40,8 +40,8 @@ if (!fs.existsSync(targetDrive)) {
   process.exit(1);
 }
 
-// Files that should remain as .py (not compiled)
-const keepAsPython = new Set(['code.py', 'boot.py', 'secrets.py', 'config.py']);
+// Files that should remain as .py or other formats (not compiled)
+const keepAsPython = new Set(['code.py', 'boot.py', 'secrets.py', 'config.py', 'settings.toml.example']);
 
 // Files that should be deleted (have .mpy versions)
 const filesToDelete = [
@@ -190,6 +190,10 @@ try {
   console.log('=======================================');
   console.log('Deployment complete!');
   console.log('=======================================');
+  console.log('');
+  console.log('IMPORTANT: Create settings.toml on the CIRCUITPY drive:');
+  console.log('  1. Copy settings.toml.example → settings.toml');
+  console.log('  2. Edit settings.toml with your WiFi credentials');
   console.log('');
   console.log('Your MatrixPortal should reset and run with compiled .mpy modules.');
   console.log('Expected memory improvement: 9-14 KB more free RAM');

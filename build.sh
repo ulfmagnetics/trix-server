@@ -7,8 +7,8 @@ SRC_DIR="matrixportal"
 BUILD_DIR="matrixportal/build"
 MPY_CROSS="/usr/local/bin/mpy-cross"  # Adjust if installed elsewhere
 
-# Files to exclude from compilation (must stay as .py)
-EXCLUDE_FILES=("code.py" "boot.py" "secrets.py" "config.py")
+# Files to exclude from compilation (must stay as .py or other formats)
+EXCLUDE_FILES=("code.py" "boot.py" "secrets.py" "config.py" "settings.toml.example")
 
 # Color output
 GREEN='\033[0;32m'
@@ -119,9 +119,13 @@ echo ""
 echo "2. Copy non-compiled files:"
 echo "   - $SRC_DIR/code.py → CIRCUITPY/code.py"
 echo "   - $SRC_DIR/boot.py → CIRCUITPY/boot.py (if exists)"
-echo "   - $SRC_DIR/secrets.py → CIRCUITPY/secrets.py (if exists)"
+echo "   - $SRC_DIR/settings.toml.example → CIRCUITPY/settings.toml.example"
 echo ""
-echo -e "${YELLOW}3. CRITICAL: Delete old .py files that now have .mpy versions:${NC}"
+echo "3. Create WiFi credentials file (MatrixPortal S3):"
+echo "   - Create CIRCUITPY/settings.toml with your WiFi credentials"
+echo "   - Use settings.toml.example as a template"
+echo ""
+echo -e "${YELLOW}4. CRITICAL: Delete old .py files that now have .mpy versions:${NC}"
 echo "   - Delete: CIRCUITPY/display.py"
 echo "   - Delete: CIRCUITPY/context.py"
 echo "   - Delete: CIRCUITPY/crash_logger.py"
@@ -134,7 +138,7 @@ echo "   - Delete: CIRCUITPY/routes/__init__.py"
 echo ""
 echo -e "${YELLOW}   Note: CircuitPython prefers .py over .mpy if both exist!${NC}"
 echo ""
-echo "4. Test the deployment:"
+echo "5. Test the deployment:"
 echo "   - Connect to serial console"
 echo "   - import gc; gc.collect(); print(gc.mem_free())"
 echo "   - Expect 9-14 KB more free memory than before"

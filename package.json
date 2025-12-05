@@ -1,7 +1,7 @@
 {
   "name": "trix-server",
   "version": "1.0.0",
-  "description": "MatrixPortal M4 development and deployment",
+  "description": "MatrixPortal S3 development and deployment",
   "scripts": {
     "deploy": "node scripts/deploy.js"
   },
