@@ -1,6 +1,9 @@
 # MatrixPortal secrets file (contains WiFi credentials, API keys, etc.)
 matrixportal/secrets.py
 
+# MatrixPortal S3 settings file (contains WiFi credentials)
+matrixportal/settings.toml
+
 # MatrixPortal config file (personal debug settings)
 matrixportal/config.py
 

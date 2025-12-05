@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2025
 # SPDX-License-Identifier: MIT
 
-"""Crash logging system for MatrixPortal M4.
+"""Crash logging system for MatrixPortal S3.
 
 Provides persistent crash logging with filesystem, NVM, and memory buffer fallback.
 Captures full stack traces, uptime, and crash counts for debugging random crashes.
@@ -121,13 +121,20 @@ class CrashLogger:
 
         self._write(msg)
 
-    def log_esp32_reset(self, reason=""):
-        """Log ESP32 reset event.
+    def log_recovery_attempt(self, reason=""):
+        """Log server recovery attempt.
 
         Args:
-            reason: Reason for reset (e.g., "consecutive errors", "manual")
+            reason: Reason for recovery (e.g., "consecutive errors", "manual")
         """
-        self.log_event(f"ESP32 reset triggered - {reason}", "WARNING")
+        self.log_event(f"Server recovery triggered - {reason}", "WARNING")
+
+    def log_esp32_reset(self, reason=""):
+        """DEPRECATED: Use log_recovery_attempt() instead.
+
+        Kept for backward compatibility.
+        """
+        self.log_recovery_attempt(reason)
 
     def dump_memory_buffer(self):
         """Try to dump memory buffer to file (call when filesystem becomes writable).

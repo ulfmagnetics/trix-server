@@ -3,65 +3,64 @@
 
 """MatrixPortal HTTP Server - Main entry point."""
 
-import adafruit_connection_manager
 import adafruit_requests
-import board
-import busio
-import gc
-import time
 import displayio
-from adafruit_esp32spi import adafruit_esp32spi
-from adafruit_matrixportal.matrix import Matrix
-from digitalio import DigitalInOut
+import gc
+import os
+import socketpool
+import ssl
+import time
+import wifi
 from adafruit_httpserver import Server
-import adafruit_esp32spi.adafruit_esp32spi_socketpool as socketpool
+from adafruit_matrixportal.matrix import Matrix
 
 from display import DisplayManager
 from context import AppContext
 from crash_logger import logger
 import routes
 
-# Get wifi details and more from a secrets.py file
-try:
-    from secrets import secrets
-except ImportError:
-    print("WiFi secrets are kept in secrets.py, please add them there!")
-    raise
 
-def connect_wifi(radio, wifi_secrets):
-    """Connect to WiFi access point.
+def connect_wifi():
+    """Connect to WiFi using credentials from settings.toml."""
+    ssid = os.getenv('CIRCUITPY_WIFI_SSID')
+    password = os.getenv('CIRCUITPY_WIFI_PASSWORD')
 
-    Args:
-        radio: ESP_SPIcontrol instance
-        wifi_secrets: Dictionary with 'ssid' and 'password' keys
-    """
-    print("Connecting to AP...")
-    while not radio.is_connected:
+    if not ssid or not password:
+        raise ValueError(
+            "WiFi credentials not found. Create settings.toml with:\n"
+            "CIRCUITPY_WIFI_SSID = \"your-network\"\n"
+            "CIRCUITPY_WIFI_PASSWORD = \"your-password\""
+        )
+
+    print(f"Connecting to WiFi: {ssid}")
+    while not wifi.radio.connected:
         try:
-            radio.connect_AP(wifi_secrets["ssid"], wifi_secrets["password"])
+            wifi.radio.connect(ssid, password)
         except ConnectionError as e:
-            print(f"  Could not connect to AP, retrying: {e}")
+            print(f"  Could not connect, retrying: {e}")
             time.sleep(1)
-    print("Connected to", str(radio.ap_info.ssid, "utf-8"), "\tRSSI:", radio.ap_info.rssi)
+
+    print(f"Connected to {ssid}")
+    print(f"  IP: {wifi.radio.ipv4_address}")
+    print(f"  RSSI: {wifi.radio.ap_info.rssi} dBm")
 
 
-def initialize_networking_and_server(radio, display_manager):
+def initialize_networking_and_server(display_manager):
     """Initialize networking stack and HTTP server.
 
     Args:
-        radio: ESP_SPIcontrol instance
         display_manager: DisplayManager instance
 
     Returns:
         tuple: (http_server, context) - Server and application context
     """
     # Initialize socket pool and requests session
-    pool = socketpool.SocketPool(radio)
-    ssl_context = adafruit_connection_manager.get_radio_ssl_context(radio)
+    pool = socketpool.SocketPool(wifi.radio)
+    ssl_context = ssl.create_default_context()
     requests = adafruit_requests.Session(pool, ssl_context)
 
-    # Create application context (shared resources for routes)
-    context = AppContext(display_manager, requests, radio)
+    # Create application context (no radio parameter needed)
+    context = AppContext(display_manager, requests)
 
     # Create HTTP server and register routes
     http_server = Server(pool, debug=False)
@@ -74,7 +73,7 @@ def initialize_networking_and_server(radio, display_manager):
     routes.register_all(http_server, context)
 
     # Start HTTP server
-    ip = radio.pretty_ip(radio.ip_address)
+    ip = wifi.radio.ipv4_address
     http_server.start(str(ip), port=80)
     print(f"HTTP server started at {ip}:80")
 
@@ -84,22 +83,10 @@ def initialize_networking_and_server(radio, display_manager):
 print("MatrixPortal HTTP Server Starting...")
 logger.log_event("MatrixPortal HTTP Server Starting")
 
-# Initialize ESP32 SPI WiFi hardware
+# Connect to WiFi (built-in ESP32-S3)
 try:
-    esp32_cs = DigitalInOut(board.ESP_CS)
-    esp32_ready = DigitalInOut(board.ESP_BUSY)
-    esp32_reset = DigitalInOut(board.ESP_RESET)
-    spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
-    radio = adafruit_esp32spi.ESP_SPIcontrol(spi, esp32_cs, esp32_ready, esp32_reset)
-    logger.log_event("ESP32 SPI initialized")
-except Exception as e:
-    logger.log_exception(e, "ESP32 SPI initialization")
-    raise
-
-# Connect to WiFi
-try:
-    connect_wifi(radio, secrets)
-    logger.log_event(f"Connected to WiFi: {str(radio.ap_info.ssid, 'utf-8')}")
+    connect_wifi()
+    logger.log_event(f"Connected to WiFi: {os.getenv('CIRCUITPY_WIFI_SSID')}")
 except Exception as e:
     logger.log_exception(e, "WiFi connection")
     raise
@@ -121,7 +108,7 @@ except Exception as e:
 try:
     gc.collect()
     print(f"Memory after hardware initialization: {gc.mem_free()} bytes free")
-    http_server, context = initialize_networking_and_server(radio, display_manager)
+    http_server, context = initialize_networking_and_server(display_manager)
     logger.log_event(f"HTTP server ready (free memory: {gc.mem_free()} bytes)")
 except Exception as e:
     logger.log_exception(e, "Server initialization")
@@ -151,31 +138,30 @@ while True:
         consecutive_errors += 1
 
         if consecutive_errors >= ERROR_THRESHOLD:
-            print(f"\nESP32 unresponsive after {consecutive_errors} errors, performing hardware reset...")
-            logger.log_esp32_reset(f"consecutive errors ({consecutive_errors})")
+            print(f"\nServer unresponsive after {consecutive_errors} errors, attempting recovery...")
+            logger.log_event(f"Recovery triggered: consecutive errors ({consecutive_errors})", "WARNING")
 
             try:
                 # Clear display to remove stale data
                 display_manager.clear_display()
 
-                # Reset ESP32 using built-in method
-                print("Resetting ESP32...")
-                radio.reset()
-                time.sleep(2)  # Wait for ESP32 boot
+                # Reconnect WiFi if disconnected
+                if not wifi.radio.connected:
+                    print("Reconnecting WiFi...")
+                    connect_wifi()
 
-                # Reconnect WiFi and reinitialize server
-                connect_wifi(radio, secrets)
-                http_server, context = initialize_networking_and_server(radio, display_manager)
+                # Reinitialize server
+                http_server, context = initialize_networking_and_server(display_manager)
 
                 print("=" * 50)
                 print("Server recovery complete!")
                 print("=" * 50)
-                logger.log_event("ESP32 reset and server recovery successful")
+                logger.log_event("Server recovery successful")
 
                 consecutive_errors = 0  # Reset counter
 
             except Exception as recovery_error:
-                logger.log_exception(recovery_error, "ESP32 reset recovery failed")
+                logger.log_exception(recovery_error, "Recovery failed")
                 print(f"FATAL: Recovery failed - {recovery_error}")
                 # Re-raise to trigger safe mode
                 raise
