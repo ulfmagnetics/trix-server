@@ -42,7 +42,8 @@ def connect_wifi():
 
     print(f"Connected to {ssid}")
     print(f"  IP: {wifi.radio.ipv4_address}")
-    print(f"  RSSI: {wifi.radio.ap_info.rssi} dBm")
+    if wifi.radio.ap_info:
+        print(f"  RSSI: {wifi.radio.ap_info.rssi} dBm")
 
 
 def initialize_networking_and_server(display_manager):
@@ -63,7 +64,7 @@ def initialize_networking_and_server(display_manager):
     context = AppContext(display_manager, requests)
 
     # Create HTTP server and register routes
-    http_server = Server(pool, debug=False)
+    http_server = Server(pool, debug=False)  # type: ignore[arg-type]
 
     # Configure server for reliable large POST requests (6198-byte bitmaps)
     # Default buffer (1024 bytes) requires ~6 recv() calls, increasing timeout risk
@@ -107,9 +108,9 @@ except Exception as e:
 # Initialize networking and HTTP server
 try:
     gc.collect()
-    print(f"Memory after hardware initialization: {gc.mem_free()} bytes free")
+    print(f"Memory after hardware initialization: {gc.mem_free()} bytes free")  # type: ignore[attr-defined]
     http_server, context = initialize_networking_and_server(display_manager)
-    logger.log_event(f"HTTP server ready (free memory: {gc.mem_free()} bytes)")
+    logger.log_event(f"HTTP server ready (free memory: {gc.mem_free()} bytes)")  # type: ignore[attr-defined]
 except Exception as e:
     logger.log_exception(e, "Server initialization")
     raise
