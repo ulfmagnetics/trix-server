@@ -1,6 +1,6 @@
 # trix-server
 
-HTTP server for Adafruit MatrixPortal M4 that displays 64x32 bitmaps on an RGB matrix display.
+HTTP server for Adafruit MatrixPortal S3 that displays 64x32 bitmaps on an RGB matrix display.
 
 ## Features
 
@@ -15,105 +15,67 @@ HTTP server for Adafruit MatrixPortal M4 that displays 64x32 bitmaps on an RGB m
 
 ```
 matrixportal/
-├── code.py              # Main entry point - WiFi connection & server startup
-├── display.py           # DisplayManager class - handles RGB matrix display
-├── context.py           # AppContext - dependency injection container
-├── utils.py             # Bitmap parsing utilities
+├── code.py                  # Main entry point - WiFi connection & server startup
+├── boot.py                  # Boot configuration - filesystem write permissions
+├── display.py               # DisplayManager class - handles RGB matrix display
+├── context.py               # AppContext - dependency injection container
+├── crash_logger.py          # Hybrid crash logging system (file/NVM/memory)
+├── utils.py                 # Bitmap parsing utilities
 ├── routes/
-│   ├── __init__.py     # Route registration
-│   ├── display.py      # /display endpoint (binary upload)
-│   └── fetch.py        # /fetch endpoint (URL fetch)
-└── secrets.py          # WiFi credentials (not in git)
+│   ├── __init__.py         # Route registration
+│   ├── display.py          # /display endpoint (binary upload)
+│   ├── fetch.py            # /fetch endpoint (URL fetch)
+│   ├── clear.py            # /clear endpoint (clear display)
+│   └── crash.py            # /crash endpoints (logging and diagnostics)
+├── settings.toml.example    # WiFi credentials template
+└── settings.toml            # WiFi credentials (not in git, create from example)
 
 scripts/
-├── deploy.js           # Node.js deployment script
+├── deploy.js                # Node.js deployment script
 
-deploy-config.json      # Deployment configuration
+build.sh                     # mpy-cross compilation script
+deploy-config.json           # Deployment configuration
 ```
 
-## Custom Firmware Required
+## Hardware Architecture
 
-This project requires **custom CircuitPython firmware** with enhanced ESP32SPI library support for server sockets.
+The MatrixPortal S3 features:
+- **ESP32-S3** processor with built-in WiFi (no SPI co-processor needed)
+- **Hardware parallel output peripheral** for matrix control (faster than M4 bitbanging)
+- **Dual-core architecture** - one core for WiFi/matrix, one for your code
+- **8MB flash, 2MB PSRAM** - significantly more memory than the M4's 192KB RAM
 
-### Why Custom Firmware?
-
-The default CircuitPython ESP32SPI library only supports client sockets. This project requires server socket capabilities (`bind()`, `listen()`, `accept()`) which are provided by [Neradoc's PR #218](https://github.com/adafruit/Adafruit_CircuitPython_ESP32SPI/pull/218).
-
-### Building Custom Firmware
-
-1. **Clone CircuitPython repository:**
-   ```bash
-   git clone https://github.com/adafruit/circuitpython.git
-   cd circuitpython
-   ```
-
-2. **Install build dependencies:**
-   ```bash
-   make fetch-submodules
-   make fetch-port-submodules BOARD=matrixportal_m4
-   ```
-
-3. **Clone enhanced ESP32SPI library:**
-   ```bash
-   cd frozen/Adafruit_CircuitPython_ESP32SPI
-   git fetch origin pull/218/head:more-compatible-api
-   git checkout more-compatible-api
-   cd ../..
-   ```
-
-4. **Build firmware:**
-   ```bash
-   make BOARD=matrixportal_m4
-   ```
-
-5. **Flash to device:**
-   - Put MatrixPortal in bootloader mode (double-tap reset button)
-   - Copy `build-matrixportal_m4/firmware.uf2` to the MATRIXBOOT drive
-
-### Verifying Custom Firmware
-
-After flashing, run this in the CircuitPython REPL to verify server socket support:
-
-```python
-import adafruit_esp32spi.adafruit_esp32spi_socketpool as socketpool
-import board, busio, digitalio
-from adafruit_esp32spi import adafruit_esp32spi
-
-# Initialize ESP32
-esp32_cs = digitalio.DigitalInOut(board.ESP_CS)
-esp32_ready = digitalio.DigitalInOut(board.ESP_BUSY)
-esp32_reset = digitalio.DigitalInOut(board.ESP_RESET)
-spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
-radio = adafruit_esp32spi.ESP_SPIcontrol(spi, esp32_cs, esp32_ready, esp32_reset)
-
-# Check for server socket methods
-pool = socketpool.SocketPool(radio)
-sock = pool.socket()
-print("bind" in dir(sock))      # Should print: True
-print("listen" in dir(sock))    # Should print: True
-print("accept" in dir(sock))    # Should print: True
-```
+**No custom firmware required** - standard CircuitPython works out of the box!
 
 ## Getting Started
 
 ### Prerequisites
 
-- Adafruit MatrixPortal M4 with custom CircuitPython firmware (see above)
-- 64x32 RGB LED matrix panel
+- Adafruit MatrixPortal S3 with CircuitPython 9.0+ installed
+- 64x32 RGB LED matrix panel (or other HUB-75 compatible sizes)
 - Node.js installed on your development machine
-- WiFi network credentials
+- WiFi network (2.4GHz or 5GHz)
+- WSL (Windows Subsystem for Linux) for mpy-cross compilation (optional but recommended)
 
 ### Setup
 
-1. **Create WiFi secrets file** at `matrixportal/secrets.py`:
-   ```python
-   secrets = {
-       "ssid": "your-wifi-ssid",
-       "password": "your-wifi-password"
-   }
+1. **Create WiFi settings file** on the CIRCUITPY drive:
+
+   Copy `matrixportal/settings.toml.example` to the CIRCUITPY drive and rename it to `settings.toml`:
+
+   ```toml
+   # WiFi credentials for MatrixPortal S3
+   CIRCUITPY_WIFI_SSID = "your-network-name"
+   CIRCUITPY_WIFI_PASSWORD = "your-password"
+
+   # Disable CircuitPython web workflow (allows our HTTP server to use port 80)
+   CIRCUITPY_WEB_API_PASSWORD = ""
    ```
 
-   > **Note:** This file is gitignored and must be created manually
+   > **Important:**
+   > - This file must be on the CIRCUITPY drive, not in the git repository
+   > - Set `CIRCUITPY_WEB_API_PASSWORD = ""` to disable the built-in web server
+   > - Without this, you'll get an `EADDRINUSE` error (port 80 conflict)
 
 2. **Connect your MatrixPortal** via USB
    - It should mount as a drive (default: E:)
@@ -123,12 +85,46 @@ print("accept" in dir(sock))    # Should print: True
    ```bash
    npm run deploy
    ```
-   - Copies all files from `matrixportal/` to your MatrixPortal
+   - Compiles Python modules to `.mpy` bytecode using mpy-cross
+   - Copies compiled modules and non-compiled files to CIRCUITPY drive
    - Device automatically resets and runs the new code
+   - Provides 9-14 KB memory savings vs raw `.py` files
 
 4. **Find your device IP:**
    - Connect to the serial console to see the IP address printed on startup
    - Use a serial monitor like Mu Editor, PuTTY, or Arduino Serial Monitor
+
+   Expected startup output:
+   ```
+   Connecting to WiFi: YourNetwork
+   Connected to YourNetwork
+     IP: 192.168.1.XXX
+     RSSI: -XX dBm
+   HTTP server started at 192.168.1.XXX:80
+   ```
+
+5. **(Optional) Set static IP:**
+   - Find your device's MAC address (see "Finding MAC Address" below)
+   - Configure DHCP reservation in your router using the MAC address
+
+## Finding MAC Address
+
+To set a static IP reservation in your router, you'll need the MatrixPortal's MAC address:
+
+**Method 1: Serial Console**
+```python
+import wifi
+print("MAC:", ":".join([f"{b:02X}" for b in wifi.radio.mac_address]))
+```
+
+**Method 2: Add to code.py**
+
+Add after WiFi connection (around line 90):
+```python
+mac_bytes = wifi.radio.mac_address
+mac_str = ":".join([f"{b:02X}" for b in mac_bytes])
+print(f"  MAC: {mac_str}")
+```
 
 ## API Documentation
 
@@ -157,7 +153,7 @@ Upload bitmap data directly to the display.
 **Example:**
 ```bash
 # Upload a local bitmap file
-curl -X POST http://192.168.1.126/display \
+curl -X POST http://192.168.1.XXX/display \
   --data-binary @my-bitmap.bmp \
   -H "Content-Type: application/octet-stream"
 ```
@@ -181,11 +177,58 @@ Fetch and display a bitmap from a URL.
 **Example:**
 ```bash
 # Fetch from URL
-curl -X POST http://192.168.1.126/fetch \
+curl -X POST http://192.168.1.XXX/fetch \
   -d "https://example.com/images/bitmap.bmp"
 ```
 
 **Memory:** Requires pre-allocated buffer matching bitmap file size
+
+### GET /clear
+
+Clear the display (all pixels off).
+
+**Request:**
+- **Method:** `GET`
+
+**Response:**
+- **200 OK:** `"Display cleared"`
+- **500 Internal Server Error:** Error during clear operation
+
+**Example:**
+```bash
+curl http://192.168.1.XXX/clear
+```
+
+### GET /crash
+
+View crash logs and diagnostics.
+
+**Request:**
+- **Method:** `GET`
+
+**Response:**
+- **200 OK:** Crash log contents (text/plain)
+
+**Example:**
+```bash
+curl http://192.168.1.XXX/crash
+```
+
+### POST /crash/clear
+
+Clear the crash log file.
+
+**Request:**
+- **Method:** `POST`
+
+**Response:**
+- **200 OK:** `"Crash log cleared"`
+- **500 Internal Server Error:** Failed to clear log
+
+**Example:**
+```bash
+curl -X POST http://192.168.1.XXX/crash/clear
+```
 
 ## Bitmap Requirements
 
@@ -222,49 +265,101 @@ img.save("output.bmp", "BMP")
 
 ## Memory Management
 
-The MatrixPortal M4 has only **192KB of RAM**. This implementation uses several strategies to avoid memory allocation failures:
+The MatrixPortal S3 has **2MB of PSRAM** - significantly more than the M4's 192KB. However, this implementation still uses memory-efficient strategies:
 
 - **Pre-allocated buffers** for HTTP downloads (single allocation, no fragmentation)
 - **Clear old display BEFORE loading new bitmap** (never hold two bitmaps in RAM)
 - **Aggressive garbage collection** after each operation
 - **Streaming downloads** in 1KB chunks
-- **Immediate cleanup** of temporary objects
+- **Compiled `.mpy` modules** (37% smaller than `.py`, 9-14 KB RAM savings)
 
-Typical memory profile:
-- **Startup:** ~79KB free
-- **After displaying bitmap:** ~69KB free
-- **Stable across 6+ consecutive requests**
+Typical memory profile (with `.mpy` modules):
+- **Startup:** ~1.9 MB free
+- **After displaying bitmap:** ~1.8+ MB free
+- **Stable across many consecutive requests**
+
+### Building Compiled Modules
+
+The deployment script automatically compiles Python modules to `.mpy` bytecode:
+
+```bash
+npm run deploy
+```
+
+This uses `mpy-cross` via WSL to compile all modules except:
+- `code.py` (must remain as `.py` - entry point)
+- `boot.py` (must remain as `.py` - boot configuration)
+- `settings.toml.example` (template file)
+
+**Benefits:**
+- 37% smaller file size
+- 9-14 KB less RAM usage
+- Eliminates compilation-time memory fragmentation
+- Faster module loading
 
 ## Troubleshooting
 
 ### Device won't connect to WiFi
-- Check `secrets.py` credentials are correct
-- Verify WiFi network is 2.4GHz (ESP32 doesn't support 5GHz)
+- Check `settings.toml` credentials are correct
+- Verify `settings.toml` is on the CIRCUITPY drive (not in git repo)
 - Check serial console for connection error messages
+- Try both 2.4GHz and 5GHz networks (S3 supports both)
+
+### `EADDRINUSE` error (port 80 in use)
+This means CircuitPython's built-in web workflow is using port 80.
+
+**Solution:** Disable web workflow in `settings.toml`:
+```toml
+CIRCUITPY_WEB_API_PASSWORD = ""
+```
+
+**Why this happens:**
+- The S3 has built-in WiFi, so CircuitPython enables web workflow by default
+- Web workflow provides WiFi access to the CIRCUITPY drive on port 80
+- Our HTTP server also needs port 80
+- Setting an empty password disables web workflow
+
+**Alternative:** Change your server to use port 8080 (modify line 78 in `code.py`)
 
 ### Memory allocation errors
 - Ensure only one bitmap is in RAM at a time
 - Check bitmap file size (should be ~6KB for 64x32x24bit)
 - Monitor serial console for memory free reports
-
-### Server socket errors
-- Verify custom firmware is installed (see "Verifying Custom Firmware")
-- Check that `bind`, `listen`, `accept` methods exist on Socket objects
-- Ensure ESP32 SPI connections are correct
+- Verify `.mpy` modules are deployed (run `npm run deploy`)
 
 ### Bitmap doesn't display
 - Verify bitmap is exactly 64x32 pixels
 - Check bitmap is 24-bit RGB format (not indexed color)
 - Monitor serial console for parsing errors
+- Try the `/clear` endpoint first to ensure display is working
+
+### Crash logs not persisting
+- Check if pin A1 is grounded (enables filesystem write mode)
+- See `boot.py` for filesystem write mode configuration
+- Logs are buffered in memory if filesystem is read-only
+- View logs via `/crash` endpoint even if filesystem is read-only
+
+## Migrating from MatrixPortal M4
+
+If you're upgrading from the M4 version:
+
+1. **No custom firmware needed** - Use standard CircuitPython for S3
+2. **Replace `secrets.py` with `settings.toml`** - See setup instructions above
+3. **Disable web workflow** - Add `CIRCUITPY_WEB_API_PASSWORD = ""` to settings
+4. **Enjoy better performance** - Hardware parallel matrix control is faster
+5. **More memory available** - 2MB PSRAM vs 192KB RAM
+
+All API endpoints and bitmap formats remain the same - clients don't need updates.
 
 ## Contributing
 
-This is an embedded device project with strict memory constraints. When contributing:
+This is an embedded device project optimized for memory efficiency. When contributing:
 
 1. **Test memory usage** - Monitor `gc.mem_free()` before/after changes
 2. **Pre-allocate buffers** - Avoid multiple small allocations
 3. **Clean up immediately** - Delete temporary objects and call `gc.collect()`
 4. **Test multiple requests** - Ensure no memory leaks across 6+ requests
+5. **Use `.mpy` compilation** - Keep modules compilable with mpy-cross
 
 ## License
 
