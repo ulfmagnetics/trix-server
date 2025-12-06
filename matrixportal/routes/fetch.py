@@ -5,6 +5,7 @@
 
 import gc
 from adafruit_httpserver import Request, Response
+from auth import require_api_key
 
 
 def register(server, context):
@@ -18,6 +19,11 @@ def register(server, context):
     @server.route("/fetch", methods=["POST"])
     def fetch_bitmap_handler(request: Request):
         """Handle POST requests with bitmap URL in body"""
+        # Authenticate request
+        auth_response = require_api_key(request, context.api_key)
+        if auth_response is not None:
+            return auth_response
+
         # Aggressive GC before handling request
         gc.collect()
         print(f"Memory at request start: {gc.mem_free()} bytes free")

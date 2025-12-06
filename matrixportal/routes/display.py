@@ -7,6 +7,7 @@ import gc
 import utils
 import traceback
 from adafruit_httpserver import Request, Response
+from auth import require_api_key
 from crash_logger import logger
 
 
@@ -21,6 +22,11 @@ def register(server, context):
     @server.route("/display", methods=["POST"])
     def display_bitmap_handler(request: Request):
         """Handle POST requests with bitmap data in body (raw binary)"""
+        # Authenticate request
+        auth_response = require_api_key(request, context.api_key)
+        if auth_response is not None:
+            return auth_response
+
         # Aggressive GC before handling request
         gc.collect()
         print(f"Memory at request start: {gc.mem_free()} bytes free")

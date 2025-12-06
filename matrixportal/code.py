@@ -46,11 +46,32 @@ def connect_wifi():
         print(f"  RSSI: {wifi.radio.ap_info.rssi} dBm")
 
 
-def initialize_networking_and_server(display_manager):
+def load_api_key():
+    """Load API key from settings.toml with fail-secure validation."""
+    api_key = os.getenv('TRIX_API_KEY')
+
+    if not api_key:
+        raise ValueError(
+            "API key not configured. Add to settings.toml:\n"
+            "TRIX_API_KEY = \"your-secure-random-key\""
+        )
+
+    if len(api_key) < 16:
+        raise ValueError(
+            "API key too short (minimum 16 characters required). "
+            "Generate a secure random key for TRIX_API_KEY in settings.toml"
+        )
+
+    print("API key loaded (authentication enabled)")
+    return api_key
+
+
+def initialize_networking_and_server(display_manager, api_key):
     """Initialize networking stack and HTTP server.
 
     Args:
         display_manager: DisplayManager instance
+        api_key: API key for authentication
 
     Returns:
         tuple: (http_server, context) - Server and application context
@@ -60,8 +81,8 @@ def initialize_networking_and_server(display_manager):
     ssl_context = ssl.create_default_context()
     requests = adafruit_requests.Session(pool, ssl_context)
 
-    # Create application context (no radio parameter needed)
-    context = AppContext(display_manager, requests)
+    # Create application context
+    context = AppContext(display_manager, requests, api_key)
 
     # Create HTTP server and register routes
     http_server = Server(pool, debug=False)  # type: ignore[arg-type]
@@ -92,6 +113,14 @@ except Exception as e:
     logger.log_exception(e, "WiFi connection")
     raise
 
+# Load API key (fail-secure - must be configured)
+try:
+    api_key = load_api_key()
+    logger.log_event("API key loaded successfully")
+except Exception as e:
+    logger.log_exception(e, "API key loading")
+    raise
+
 # Initialize display
 try:
     matrix = Matrix()
@@ -109,7 +138,7 @@ except Exception as e:
 try:
     gc.collect()
     print(f"Memory after hardware initialization: {gc.mem_free()} bytes free")  # type: ignore[attr-defined]
-    http_server, context = initialize_networking_and_server(display_manager)
+    http_server, context = initialize_networking_and_server(display_manager, api_key)
     logger.log_event(f"HTTP server ready (free memory: {gc.mem_free()} bytes)")  # type: ignore[attr-defined]
 except Exception as e:
     logger.log_exception(e, "Server initialization")
@@ -152,7 +181,7 @@ while True:
                     connect_wifi()
 
                 # Reinitialize server
-                http_server, context = initialize_networking_and_server(display_manager)
+                http_server, context = initialize_networking_and_server(display_manager, api_key)
 
                 print("=" * 50)
                 print("Server recovery complete!")

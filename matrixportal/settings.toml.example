@@ -9,3 +9,9 @@ CIRCUITPY_WIFI_PASSWORD = "your-password"
 # The web workflow provides WiFi access to the CIRCUITPY drive, but we don't need it
 # since we're running our own HTTP server. Set to empty string to disable.
 CIRCUITPY_WEB_API_PASSWORD = ""
+
+# API key for HTTP endpoint authentication
+# Generate a secure random key (minimum 16 characters recommended)
+# Example: Use a password generator or run: python -c "import secrets; print(secrets.token_urlsafe(32))"
+# KEEP THIS SECRET - treat like a password
+TRIX_API_KEY = "your-secure-random-key-here"
