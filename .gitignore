@@ -15,5 +15,6 @@ matrixportal/build/
 node_modules/
 
 # IDE
-.vscode/
+.vscode/settings.json
 .idea/
+.claude/settings.local.json
