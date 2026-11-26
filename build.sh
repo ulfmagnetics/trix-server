@@ -8,7 +8,7 @@ BUILD_DIR="matrixportal/build"
 MPY_CROSS="/usr/local/bin/mpy-cross"  # Adjust if installed elsewhere
 
 # Files to exclude from compilation (must stay as .py or other formats)
-EXCLUDE_FILES=("code.py" "boot.py" "secrets.py" "config.py" "settings.toml.example")
+EXCLUDE_FILES=("code.py" "boot.py" "safemode.py" "secrets.py" "config.py" "settings.toml.example")
 
 # Color output
 GREEN='\033[0;32m'

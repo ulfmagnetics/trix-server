@@ -15,3 +15,14 @@ CIRCUITPY_WEB_API_PASSWORD = ""
 # Example: Use a password generator or run: python -c "import secrets; print(secrets.token_urlsafe(32))"
 # KEEP THIS SECRET - treat like a password
 TRIX_API_KEY = "your-secure-random-key-here"
+
+# --- Self-recovery (health.py / safemode.py) ---
+# Hardware watchdog: reset the board if the main loop stops for this many
+# seconds. Set to 0 while debugging over USB, or the board will reset under you.
+TRIX_WATCHDOG_TIMEOUT = 60
+# Reset if trix-hub hasn't sent a successful /display for this many minutes.
+TRIX_STALE_MINUTES = 15
+# Allowed gap after a /clear (trix-hub's overnight blank window) and after boot.
+TRIX_STALE_AFTER_CLEAR_MINUTES = 480
+# Ping the default gateway every minute; reset after 5 consecutive failures.
+TRIX_GATEWAY_PING = 1

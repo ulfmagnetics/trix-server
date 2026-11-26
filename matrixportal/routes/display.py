@@ -64,6 +64,8 @@ def register(server, context):
             context.display.display_bitmap(bmp)
 
             print("Displayed uploaded bitmap")
+            if context.health is not None:
+                context.health.record_display()
 
             return Response(request, "Bitmap displayed successfully", status=(200, "OK"))
 

@@ -30,6 +30,8 @@ def register(server, context):
             context.display.clear_display()
 
             print("Display cleared successfully")
+            if context.health is not None:
+                context.health.record_clear()
             return Response(request, "Display cleared successfully", status=(200, "OK"))
 
         except Exception as e:

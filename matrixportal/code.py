@@ -17,6 +17,7 @@ from adafruit_matrixportal.matrix import Matrix
 from display import DisplayManager
 from context import AppContext
 from crash_logger import logger
+import health
 import routes
 
 
@@ -82,7 +83,8 @@ def initialize_networking_and_server(display_manager, api_key):
     requests = adafruit_requests.Session(pool, ssl_context)
 
     # Create application context
-    context = AppContext(display_manager, requests, api_key)
+    context = AppContext(display_manager, requests, api_key, monitor)
+    context.boot_info = boot_info  # reported by GET /crash/counter
 
     # Create HTTP server and register routes
     http_server = Server(pool, debug=False)  # type: ignore[arg-type]
@@ -104,6 +106,10 @@ def initialize_networking_and_server(display_manager, api_key):
 
 print("MatrixPortal HTTP Server Starting...")
 logger.log_event("MatrixPortal HTTP Server Starting")
+
+# Why did we (re)start? Reads/updates the reset bookkeeping in NVM.
+boot_info = health.boot_report()
+monitor = health.HealthMonitor()
 
 # Connect to WiFi (built-in ESP32-S3)
 try:
@@ -154,8 +160,13 @@ logger.log_event("Entering main server loop")
 consecutive_errors = 0
 ERROR_THRESHOLD = 3
 
+# Arm the hardware watchdog last, so slow startup (Wi-Fi) can't trip it.
+monitor.start_watchdog()
+
 while True:
     try:
+        # Feed watchdog; reset if trix-hub has gone quiet or the gateway is gone
+        monitor.check()
         # Force GC BEFORE poll to defragment memory for incoming requests
         gc.collect()
         http_server.poll()
@@ -172,6 +183,7 @@ while True:
             logger.log_event(f"Recovery triggered: consecutive errors ({consecutive_errors})", "WARNING")
 
             try:
+                monitor.feed()
                 # Clear display to remove stale data
                 display_manager.clear_display()
 
@@ -193,8 +205,9 @@ while True:
             except Exception as recovery_error:
                 logger.log_exception(recovery_error, "Recovery failed")
                 print(f"FATAL: Recovery failed - {recovery_error}")
-                # Re-raise to trigger safe mode
-                raise
+                # Reset instead of exiting to the REPL, where the board would
+                # sit until someone pressed the reset button.
+                health.reset_for(health.CAUSE_FATAL, f"(recovery failed: {recovery_error})")
 
         gc.collect()  # Also collect on error
         time.sleep(1)
