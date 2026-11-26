@@ -47,6 +47,7 @@ CAUSE_STALE = 2
 CAUSE_GATEWAY = 3
 CAUSE_SAFEMODE = 4      # written by safemode.py
 CAUSE_FATAL = 5         # unhandled error in the main loop / failed recovery
+CAUSE_STARTUP = 6       # exception during startup (Wi-Fi, API key, display, server)
 
 CAUSE_NAMES = {
     CAUSE_NONE: "none",
@@ -55,6 +56,7 @@ CAUSE_NAMES = {
     CAUSE_GATEWAY: "gateway",
     CAUSE_SAFEMODE: "safemode",
     CAUSE_FATAL: "fatal",
+    CAUSE_STARTUP: "startup",
 }
 
 
@@ -123,12 +125,12 @@ def counters():
     """Per-cause self-reset counters from NVM (wrap at 255)."""
     return {
         CAUSE_NAMES[c]: microcontroller.nvm[NVM_COUNT_BASE + c - 1]
-        for c in (CAUSE_WATCHDOG, CAUSE_STALE, CAUSE_GATEWAY, CAUSE_SAFEMODE, CAUSE_FATAL)
+        for c in (CAUSE_WATCHDOG, CAUSE_STALE, CAUSE_GATEWAY, CAUSE_SAFEMODE, CAUSE_FATAL, CAUSE_STARTUP)
     }
 
 
 def reset_counters():
-    for c in (CAUSE_WATCHDOG, CAUSE_STALE, CAUSE_GATEWAY, CAUSE_SAFEMODE, CAUSE_FATAL):
+    for c in (CAUSE_WATCHDOG, CAUSE_STALE, CAUSE_GATEWAY, CAUSE_SAFEMODE, CAUSE_FATAL, CAUSE_STARTUP):
         microcontroller.nvm[NVM_COUNT_BASE + c - 1] = 0
 
 
@@ -152,7 +154,7 @@ class HealthMonitor:
         self.wdt = None
 
     def start_watchdog(self):
-        """Arm the hardware watchdog. Call just before entering the main loop."""
+        """Arm the hardware watchdog. Call early in startup, before Wi-Fi."""
         if self.watchdog_timeout <= 0:
             logger.log_event("Watchdog disabled (TRIX_WATCHDOG_TIMEOUT=0)")
             return

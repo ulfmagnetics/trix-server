@@ -111,21 +111,43 @@ logger.log_event("MatrixPortal HTTP Server Starting")
 boot_info = health.boot_report()
 monitor = health.HealthMonitor()
 
+# Arm the watchdog before anything that can hang (Wi-Fi join, server start).
+# If startup stalls for longer than the timeout, the board resets and retries.
+monitor.start_watchdog()
+
+STARTUP_RETRY_DELAY = 30  # seconds to wait before resetting after a startup error
+
+
+def startup_failed(stage, error):
+    """Log a startup error, then reset instead of dropping to the REPL.
+
+    CircuitPython disarms the watchdog when code.py exits, so without this a
+    startup exception would leave the board at "Code done running" until
+    someone pressed reset. The delay keeps the error readable on the serial
+    console and stops a persistent fault (e.g. a bad settings.toml) from
+    reset-looping fast.
+    """
+    logger.log_exception(error, stage)
+    print(f"Startup failed during {stage}; resetting in {STARTUP_RETRY_DELAY}s")
+    end = time.monotonic() + STARTUP_RETRY_DELAY
+    while time.monotonic() < end:
+        monitor.feed()
+        time.sleep(1)
+    health.reset_for(health.CAUSE_STARTUP, f"({stage}: {error})")
+
 # Connect to WiFi (built-in ESP32-S3)
 try:
     connect_wifi()
     logger.log_event(f"Connected to WiFi: {os.getenv('CIRCUITPY_WIFI_SSID')}")
 except Exception as e:
-    logger.log_exception(e, "WiFi connection")
-    raise
+    startup_failed("WiFi connection", e)
 
 # Load API key (fail-secure - must be configured)
 try:
     api_key = load_api_key()
     logger.log_event("API key loaded successfully")
 except Exception as e:
-    logger.log_exception(e, "API key loading")
-    raise
+    startup_failed("API key loading", e)
 
 # Initialize display
 try:
@@ -137,8 +159,7 @@ try:
     display_manager = DisplayManager(matrix, color_converter)
     logger.log_event("Display initialized")
 except Exception as e:
-    logger.log_exception(e, "Display initialization")
-    raise
+    startup_failed("Display initialization", e)
 
 # Initialize networking and HTTP server
 try:
@@ -147,8 +168,7 @@ try:
     http_server, context = initialize_networking_and_server(display_manager, api_key)
     logger.log_event(f"HTTP server ready (free memory: {gc.mem_free()} bytes)")  # type: ignore[attr-defined]
 except Exception as e:
-    logger.log_exception(e, "Server initialization")
-    raise
+    startup_failed("Server initialization", e)
 
 print("=" * 50)
 print(f"MatrixPortal HTTP Server Ready!")
@@ -159,9 +179,6 @@ print("Listening for HTTP requests w/ automatic error recovery...")
 logger.log_event("Entering main server loop")
 consecutive_errors = 0
 ERROR_THRESHOLD = 3
-
-# Arm the hardware watchdog last, so slow startup (Wi-Fi) can't trip it.
-monitor.start_watchdog()
 
 while True:
     try:
