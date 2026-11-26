@@ -16,6 +16,12 @@ Three independent failure modes, three guards:
    -> ping the default gateway every minute; reset after several consecutive
       failures, but only once a ping has succeeded this boot (so a router that
       ignores ICMP can't cause a boot loop).
+4. Wi-Fi association lost (e.g. microwave-oven RF in the kitchen)
+   -> CircuitPython does not rejoin by itself, and the server's sockets are
+      dead anyway, so if the radio stays disconnected for TRIX_WIFI_LOST_SECONDS
+      (default 15), reset; a fresh boot rejoins in about a second. Checked on
+      every loop pass, so recovery follows the interference within ~15-30 s
+      instead of waiting for five failed gateway pings (~5 min).
 
 Hard faults into safe mode are handled separately by safemode.py.
 
@@ -38,7 +44,7 @@ from crash_logger import logger
 # safemode.py, which can't import this module's dependencies safely.
 # ---------------------------------------------------------------------------
 NVM_LAST_CAUSE = 1      # cause code of the most recent self-initiated reset
-NVM_COUNT_BASE = 2      # bytes 2..7: per-cause counters (wrap at 255)
+NVM_COUNT_BASE = 2      # bytes 2..8: per-cause counters (wrap at 255)
 NVM_SAFE_REASON = 16    # bytes 16..47: last safe-mode reason, ASCII, NUL-padded
 NVM_SAFE_REASON_LEN = 32
 
@@ -49,6 +55,7 @@ CAUSE_GATEWAY = 3
 CAUSE_SAFEMODE = 4      # written by safemode.py
 CAUSE_FATAL = 5         # unhandled error in the main loop / failed recovery
 CAUSE_STARTUP = 6       # exception during startup (Wi-Fi, API key, display, server)
+CAUSE_WIFI = 7          # Wi-Fi association lost and not regained
 
 CAUSE_NAMES = {
     CAUSE_NONE: "none",
@@ -58,6 +65,7 @@ CAUSE_NAMES = {
     CAUSE_SAFEMODE: "safemode",
     CAUSE_FATAL: "fatal",
     CAUSE_STARTUP: "startup",
+    CAUSE_WIFI: "wifi",
 }
 
 
@@ -137,17 +145,17 @@ def counters():
     """Per-cause self-reset counters from NVM (wrap at 255)."""
     return {
         CAUSE_NAMES[c]: microcontroller.nvm[NVM_COUNT_BASE + c - 1]
-        for c in (CAUSE_WATCHDOG, CAUSE_STALE, CAUSE_GATEWAY, CAUSE_SAFEMODE, CAUSE_FATAL, CAUSE_STARTUP)
+        for c in (CAUSE_WATCHDOG, CAUSE_STALE, CAUSE_GATEWAY, CAUSE_SAFEMODE, CAUSE_FATAL, CAUSE_STARTUP, CAUSE_WIFI)
     }
 
 
 def reset_counters():
-    for c in (CAUSE_WATCHDOG, CAUSE_STALE, CAUSE_GATEWAY, CAUSE_SAFEMODE, CAUSE_FATAL, CAUSE_STARTUP):
+    for c in (CAUSE_WATCHDOG, CAUSE_STALE, CAUSE_GATEWAY, CAUSE_SAFEMODE, CAUSE_FATAL, CAUSE_STARTUP, CAUSE_WIFI):
         microcontroller.nvm[NVM_COUNT_BASE + c - 1] = 0
 
 
 class HealthMonitor:
-    """Watchdog + staleness + gateway checks. Call check() every main-loop pass."""
+    """Watchdog + staleness + gateway + Wi-Fi checks. Call check() every main-loop pass."""
 
     def __init__(self):
         self.watchdog_timeout = _setting("TRIX_WATCHDOG_TIMEOUT", 60)   # s, 0 = off
@@ -156,6 +164,7 @@ class HealthMonitor:
         self.ping_enabled = _setting("TRIX_GATEWAY_PING", 1) != 0
         self.ping_interval_s = 60
         self.ping_failures_to_reset = 5
+        self.wifi_lost_s = _setting("TRIX_WIFI_LOST_SECONDS", 15)       # 0 = off
 
         now = time.monotonic()
         self.last_contact = now
@@ -163,6 +172,7 @@ class HealthMonitor:
         self.next_ping = now + self.ping_interval_s
         self.ping_armed = False
         self.ping_failures = 0
+        self.wifi_lost_since = None
         self.wdt = None
 
     def start_watchdog(self):
@@ -195,12 +205,28 @@ class HealthMonitor:
         self.feed()
         now = time.monotonic()
 
+        if self.wifi_lost_s > 0:
+            self._check_wifi(now)
+
         if self.stale_s > 0 and now - self.last_contact > self.allowed_gap:
             reset_for(CAUSE_STALE, f"(no request for {int(now - self.last_contact)}s)")
 
         if self.ping_enabled and now >= self.next_ping:
             self.next_ping = now + self.ping_interval_s
             self._ping_gateway()
+
+    def _check_wifi(self, now):
+        lost = (not wifi.radio.connected) or wifi.radio.ipv4_address is None
+        if not lost:
+            if self.wifi_lost_since is not None:
+                logger.log_event(f"Wi-Fi back after {now - self.wifi_lost_since:.0f}s")
+                self.wifi_lost_since = None
+            return
+        if self.wifi_lost_since is None:
+            self.wifi_lost_since = now
+            logger.log_event("Wi-Fi connection lost", "WARNING")
+        elif now - self.wifi_lost_since >= self.wifi_lost_s:
+            reset_for(CAUSE_WIFI, f"(disconnected for {now - self.wifi_lost_since:.0f}s)")
 
     def _ping_gateway(self):
         gateway = wifi.radio.ipv4_gateway

@@ -26,3 +26,6 @@ TRIX_STALE_MINUTES = 15
 TRIX_STALE_AFTER_CLEAR_MINUTES = 480
 # Ping the default gateway every minute; reset after 5 consecutive failures.
 TRIX_GATEWAY_PING = 1
+# Reset if the Wi-Fi connection stays lost this many seconds (CircuitPython
+# doesn't rejoin by itself; a fresh boot does). 0 = off.
+TRIX_WIFI_LOST_SECONDS = 15
