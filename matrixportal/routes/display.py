@@ -5,6 +5,7 @@
 
 import gc
 import utils
+from request_body import complete_body
 import traceback
 from adafruit_httpserver import Request, Response
 from auth import require_api_key
@@ -39,6 +40,21 @@ def register(server, context):
 
             # Get raw binary data from POST body
             bmp_data = request.body
+
+            # adafruit_httpserver returns a short body if a recv times out
+            # mid-upload; read the remainder ourselves before validating.
+            try:
+                expected = int(request.headers.get_directive("Content-Length", 0))
+            except (TypeError, ValueError):
+                expected = 0
+            if expected and len(bmp_data) < expected:
+                short = len(bmp_data)
+                bmp_data = complete_body(request.connection, bmp_data, expected)
+                logger.log_event(
+                    f"Short body: library gave {short}/{expected} bytes, "
+                    f"completed to {len(bmp_data)}",
+                    "WARNING" if len(bmp_data) < expected else "INFO",
+                )
 
             if not bmp_data or len(bmp_data) < 138:
                 print(f"Invalid or empty bitmap data (size: {len(bmp_data) if bmp_data else 0})")

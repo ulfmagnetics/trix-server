@@ -49,6 +49,7 @@ const filesToDelete = [
   'context.py',
   'crash_logger.py',
   'health.py',
+  'request_body.py',
   'utils.py',
   'auth.py',
   path.join('routes', '__init__.py'),
