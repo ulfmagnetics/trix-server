@@ -306,11 +306,12 @@ The display used to hang and stay down until someone pressed reset. Three guards
 | Main loop frozen | Hardware watchdog (`microcontroller.watchdog`, RESET mode) | `TRIX_WATCHDOG_TIMEOUT` (s, default 60, `0` = off) |
 | Loop running but trix-hub can't get through | Reset if there has been no successful `/display` for too long. The allowed gap is longer after a `/clear` (the overnight blank window) and after boot | `TRIX_STALE_MINUTES` (15), `TRIX_STALE_AFTER_CLEAR_MINUTES` (480) |
 | Network link down | Ping the default gateway every 60 s and reset after 5 failures in a row (only once a ping has succeeded this boot) | `TRIX_GATEWAY_PING` (1/0) |
+| Wi-Fi association lost (e.g. microwave-oven RF) | Checked every loop pass: if the radio stays disconnected, reset. CircuitPython doesn't rejoin by itself, and a fresh boot rejoins in about 1 s | `TRIX_WIFI_LOST_SECONDS` (default 15, `0` = off) |
 | Hard fault into safe mode | `safemode.py` resets immediately, except for user-requested safe mode | n/a |
 | Recovery itself fails | Reset instead of dropping to the REPL | n/a |
 | Startup error (Wi-Fi, API key, display, server init) | Log it, wait 30 s, then reset. The watchdog is armed before Wi-Fi, so a startup step that hangs (e.g. Wi-Fi never joining) also resets after the timeout | n/a |
 
-Each self-initiated reset records its cause in NVM (bytes 1–7 and 16–47; byte 0 is the crash logger's boot counter), because the filesystem is normally read-only to CircuitPython. Check the counters with:
+Each self-initiated reset records its cause in NVM (bytes 1–8 and 16–47; byte 0 is the crash logger's boot counter), because the filesystem is normally read-only to CircuitPython. Check the counters with:
 
 ```
 curl http://trix-server.local/crash/counter
