@@ -41,13 +41,14 @@ if (!fs.existsSync(targetDrive)) {
 }
 
 // Files that should remain as .py or other formats (not compiled)
-const keepAsPython = new Set(['code.py', 'boot.py', 'secrets.py', 'config.py', 'settings.toml.example']);
+const keepAsPython = new Set(['code.py', 'boot.py', 'safemode.py', 'secrets.py', 'config.py', 'settings.toml.example']);
 
 // Files that should be deleted (have .mpy versions)
 const filesToDelete = [
   'display.py',
   'context.py',
   'crash_logger.py',
+  'health.py',
   'utils.py',
   'auth.py',
   path.join('routes', '__init__.py'),

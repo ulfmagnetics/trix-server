@@ -6,6 +6,7 @@
 import gc
 from adafruit_httpserver import Request, Response
 from crash_logger import logger
+import health
 
 
 def register(server, context):
@@ -48,6 +49,7 @@ def register(server, context):
             if query_params.get('clear') == 'true':
                 logger.clear_log()
                 logger.reset_crash_counter()
+                health.reset_counters()
                 log_contents += "\n\n[Log cleared and crash counter reset]"
 
             return Response(request, log_contents, content_type="text/plain")
@@ -71,6 +73,11 @@ def register(server, context):
             response_text = f"Crash count: {crash_count}\n"
             response_text += f"Uptime: {uptime:.2f}s\n"
             response_text += f"Free memory: {free_mem} bytes\n"
+            boot = getattr(context, "boot_info", None) or {}
+            for key in ("reset_reason", "run_reason", "last_self_reset", "last_safe_mode_reason"):
+                response_text += f"{key}: {boot.get(key, '?')}\n"
+            for cause, count in health.counters().items():
+                response_text += f"self_resets.{cause}: {count}\n"
 
             return Response(request, response_text, content_type="text/plain")
 
@@ -86,6 +93,7 @@ def register(server, context):
 
         try:
             logger.reset_crash_counter()
+            health.reset_counters()
             return Response(request, "Crash counter reset successfully", status=(200, "OK"))
 
         except Exception as e:
