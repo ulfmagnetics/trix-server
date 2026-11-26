@@ -74,7 +74,7 @@ def register(server, context):
             response_text += f"Uptime: {uptime:.2f}s\n"
             response_text += f"Free memory: {free_mem} bytes\n"
             boot = getattr(context, "boot_info", None) or {}
-            for key in ("reset_reason", "last_self_reset", "last_safe_mode_reason"):
+            for key in ("reset_reason", "run_reason", "last_self_reset", "last_safe_mode_reason"):
                 response_text += f"{key}: {boot.get(key, '?')}\n"
             for cause, count in health.counters().items():
                 response_text += f"self_resets.{cause}: {count}\n"

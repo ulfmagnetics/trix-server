@@ -28,6 +28,7 @@ only persistent store that works in normal mode.
 import os
 import time
 import microcontroller
+import supervisor
 import wifi
 
 from crash_logger import logger
@@ -99,25 +100,36 @@ def boot_report():
     Returns a dict (also used by GET /crash/counter).
     """
     reset_reason = str(microcontroller.cpu.reset_reason).split(".")[-1]
+    run_reason = str(supervisor.runtime.run_reason).split(".")[-1]
     last_cause = microcontroller.nvm[NVM_LAST_CAUSE]
 
-    # A watchdog reset can't write NVM itself, so detect it here.
-    if reset_reason == "WATCHDOG" and last_cause == CAUSE_NONE:
-        last_cause = CAUSE_WATCHDOG
-        _bump(CAUSE_WATCHDOG)
+    # cpu.reset_reason describes the last *hardware* reset and stays the same
+    # across soft reloads (auto-reload on file save, Ctrl-D). Only attribute
+    # and count a reset on a real boot, or every reload would be re-counted.
+    hard_boot = run_reason == "STARTUP"
+    if hard_boot:
+        # A watchdog reset can't write NVM itself, so detect it here.
+        if reset_reason == "WATCHDOG" and last_cause == CAUSE_NONE:
+            last_cause = CAUSE_WATCHDOG
+            _bump(CAUSE_WATCHDOG)
+        last_self_reset = CAUSE_NAMES.get(last_cause, str(last_cause))
+        # Consume the cause so a later plain power-on isn't misattributed.
+        microcontroller.nvm[NVM_LAST_CAUSE] = CAUSE_NONE
+    else:
+        last_self_reset = "n/a (soft reload)"
 
     report = {
         "reset_reason": reset_reason,
-        "last_self_reset": CAUSE_NAMES.get(last_cause, str(last_cause)),
+        "run_reason": run_reason,
+        "last_self_reset": last_self_reset,
         "last_safe_mode_reason": _safe_mode_reason_from_nvm() or "-",
     }
     logger.log_event(
         f"Boot: cpu.reset_reason={report['reset_reason']}, "
+        f"run_reason={report['run_reason']}, "
         f"last self-reset={report['last_self_reset']}, "
         f"last safe-mode reason={report['last_safe_mode_reason']}"
     )
-    # Consume the cause so a later plain power-on isn't misattributed.
-    microcontroller.nvm[NVM_LAST_CAUSE] = CAUSE_NONE
     return report
 
 
